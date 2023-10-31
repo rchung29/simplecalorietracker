@@ -1,6 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:simpletracker/home.dart'; // Your HomeScreen import
 import 'auth_service.dart'; // Your AuthService import
+import 'package:simpletracker/colorScheme.dart';
+import 'package:simpletracker/login.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 
 class RegisterScreen extends StatefulWidget {
   @override
@@ -11,6 +14,26 @@ class _RegisterScreenState extends State<RegisterScreen> {
   final AuthService _authService = AuthService();
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
+  final _calorieGoalController = TextEditingController();
+  final _proteinGoalController = TextEditingController();
+  final _nameController = TextEditingController();
+
+  Future<void> saveUserDetails(String? userId, String? email, int? calorieGoal,
+      int? proteinGoal, String? name) async {
+    await FirebaseFirestore.instance.collection('userDetails').doc(userId).set({
+      'email': email,
+      'calorieGoal': calorieGoal,
+      'proteinGoal': proteinGoal,
+      'id': userId,
+      'name': name,
+      'entries': {},
+      'presets': {},
+      'workoutEntries': {},
+      'height': 0,
+      'weight': 0,
+      'dateCreated': FieldValue.serverTimestamp(),
+    });
+  }
 
   Future<void> _register() async {
     showDialog(
@@ -24,8 +47,11 @@ class _RegisterScreenState extends State<RegisterScreen> {
         _emailController.text,
         _passwordController.text,
       );
-
+      int calorieGoal = int.parse(_calorieGoalController.text);
+      int proteinGoal = int.parse(_proteinGoalController.text);
       if (userCredential != null) {
+        await saveUserDetails(userCredential.user!.uid, _emailController.text,
+            calorieGoal, proteinGoal, _nameController.text);
         Navigator.pop(context); // Close the loading dialog
         await _showCheckDialog(); // Show check dialog
         Navigator.of(context).pushAndRemoveUntil(
@@ -69,30 +95,41 @@ class _RegisterScreenState extends State<RegisterScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: Row(
+        title: Column(
+          mainAxisAlignment: MainAxisAlignment.start,
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            GestureDetector(
-              onTap: () => Navigator.pop(context),
-              child: Icon(Icons.arrow_back,
-                  color: Colors.black), // Manually add back arrow
+            Text(
+              'Welcome',
+              style: TextStyle(
+                  color: AppColors.secondary,
+                  fontSize: 20,
+                  fontWeight: FontWeight.w500),
             ),
-            SizedBox(
-                width:
-                    10), // Adjust this value to increase or decrease the space
+            SizedBox(height: 1),
             Text(
               'Register',
               style: TextStyle(
-                  color: Colors.black,
-                  fontSize: 36,
-                  fontWeight: FontWeight.bold),
+                  color: AppColors.primary,
+                  fontSize: 40,
+                  fontWeight: FontWeight.w700),
             ),
           ],
         ),
         backgroundColor: Colors.white,
         elevation: 0,
         centerTitle: false,
-        toolbarHeight: 80.0,
-        automaticallyImplyLeading: false, // This will remove default back arrow
+        toolbarHeight: 120.0,
+        bottom: PreferredSize(
+          preferredSize: Size.fromHeight(1.0), // here the desired height
+          child: Divider(
+            height: 1.0,
+            color: Color(0xFFDFE2E6),
+            thickness: 1, // color of the border
+          ),
+        ),
+        automaticallyImplyLeading:
+            false, // Adjusted height to add padding at the bottom
       ),
       body: Padding(
         padding: EdgeInsets.all(20.0),
@@ -100,6 +137,21 @@ class _RegisterScreenState extends State<RegisterScreen> {
           mainAxisAlignment: MainAxisAlignment.start,
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: <Widget>[
+            TextFormField(
+              controller: _nameController,
+              decoration: InputDecoration(
+                labelText: 'Name',
+                labelStyle: TextStyle(color: Colors.grey),
+                border: OutlineInputBorder(
+                  borderSide: BorderSide(color: Colors.blueAccent),
+                ),
+                focusedBorder: OutlineInputBorder(
+                  borderSide: BorderSide(color: Colors.blueAccent, width: 2.0),
+                ),
+              ),
+              keyboardType: TextInputType.emailAddress,
+            ),
+            SizedBox(height: 20.0),
             TextFormField(
               controller: _emailController,
               decoration: InputDecoration(
@@ -130,12 +182,72 @@ class _RegisterScreenState extends State<RegisterScreen> {
               ),
             ),
             SizedBox(height: 20.0),
+            TextFormField(
+              controller: _calorieGoalController,
+              decoration: InputDecoration(
+                labelText: 'Calorie Goal',
+                labelStyle: TextStyle(color: Colors.grey),
+                border: OutlineInputBorder(
+                  borderSide: BorderSide(color: Colors.blueAccent),
+                ),
+                focusedBorder: OutlineInputBorder(
+                  borderSide: BorderSide(color: Colors.blueAccent, width: 2.0),
+                ),
+              ),
+              keyboardType: TextInputType.number,
+            ),
+            SizedBox(height: 20.0),
+            TextFormField(
+              controller: _proteinGoalController,
+              decoration: InputDecoration(
+                labelText: 'Protein Goal',
+                labelStyle: TextStyle(color: Colors.grey),
+                border: OutlineInputBorder(
+                  borderSide: BorderSide(color: Colors.blueAccent),
+                ),
+                focusedBorder: OutlineInputBorder(
+                  borderSide: BorderSide(color: Colors.blueAccent, width: 2.0),
+                ),
+              ),
+              keyboardType: TextInputType.number,
+            ),
+            SizedBox(height: 20.0),
             ElevatedButton(
-              onPressed: _register,
-              child: Text('Register'),
+              onPressed: () async {
+                _register();
+              },
+              child: Text(
+                'Register',
+                style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
+              ),
               style: ElevatedButton.styleFrom(
-                primary: Colors.blueAccent,
-                padding: EdgeInsets.symmetric(horizontal: 50, vertical: 12),
+                primary: Color(0xFF0969FF),
+                padding: EdgeInsets.symmetric(horizontal: 50, vertical: 16),
+                elevation: 0,
+              ),
+            ),
+            SizedBox(
+              height: 20,
+            ),
+            ElevatedButton(
+              onPressed: () {
+                Navigator.pushAndRemoveUntil(
+                  context,
+                  MaterialPageRoute(builder: (context) => AuthScreen()),
+                  (Route<dynamic> route) => false,
+                );
+              },
+              child: Text(
+                'Have an Account? Login',
+                style: TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.w600,
+                    color: Color(0xFF0058E4)),
+              ),
+              style: ElevatedButton.styleFrom(
+                primary: Color(0xFFCDE2FF),
+                padding: EdgeInsets.symmetric(horizontal: 50, vertical: 16),
+                elevation: 0,
               ),
             ),
           ],

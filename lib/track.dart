@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:intl/intl.dart';
+import 'package:simpletracker/colorScheme.dart';
 
 class TrackScreen extends StatefulWidget {
   @override
@@ -18,6 +19,8 @@ class _TrackState extends State<TrackScreen> {
   bool _isPreset = false;
   int? calorieGoal;
   int? proteinGoal;
+  DateTime _selectedDate = DateTime.now();
+  bool _isLoading = true;
 
   @override
   void initState() {
@@ -74,7 +77,7 @@ class _TrackState extends State<TrackScreen> {
                         FutureBuilder<DocumentSnapshot>(
                           future: _firestore
                               .collection('userDetails')
-                              .doc('pYh2aKK8NKXPOeWKBm2W')
+                              .doc(_auth.currentUser!.uid)
                               .get(),
                           builder: (context, snapshot) {
                             if (snapshot.connectionState ==
@@ -124,7 +127,7 @@ class _TrackState extends State<TrackScreen> {
                         if (_isPreset) {
                           await _firestore
                               .collection('userDetails')
-                              .doc('pYh2aKK8NKXPOeWKBm2W')
+                              .doc(_auth.currentUser!.uid)
                               .set({
                             'presets': {
                               mealName: {
@@ -135,7 +138,7 @@ class _TrackState extends State<TrackScreen> {
                           }, SetOptions(merge: true));
                           await _firestore
                               .collection('userDetails')
-                              .doc('pYh2aKK8NKXPOeWKBm2W')
+                              .doc(_auth.currentUser!.uid)
                               .set({
                             'entries': {
                               _date: {
@@ -150,7 +153,7 @@ class _TrackState extends State<TrackScreen> {
                         } else {
                           await _firestore
                               .collection('userDetails')
-                              .doc('pYh2aKK8NKXPOeWKBm2W')
+                              .doc(_auth.currentUser!.uid)
                               .set({
                             'entries': {
                               _date: {
@@ -181,11 +184,47 @@ class _TrackState extends State<TrackScreen> {
     );
   }
 
+  void _pickDate(BuildContext context) async {
+    DateTime? pickedDate = await showDatePicker(
+      context: context,
+      initialDate: _selectedDate, // Show the currently selected date
+      firstDate: DateTime(2000),
+      lastDate: DateTime(2100),
+      builder: (BuildContext context, Widget? child) {
+        return Theme(
+          data: ThemeData.light().copyWith(
+            primaryColor: AppColors
+                .highlight, // The color for highlighted elements  // The color of the toggleable item when it's toggled on
+            colorScheme: ThemeData.light().colorScheme.copyWith(
+                  primary: AppColors
+                      .highlight, // The color of the app's primary Material widgets
+                ),
+            buttonTheme: ButtonThemeData(
+                textTheme:
+                    ButtonTextTheme.primary), // Ensure contrast on buttons
+          ),
+          child: child!,
+        );
+      },
+    );
+
+    if (pickedDate != null && pickedDate != _selectedDate) {
+      setState(() {
+        _selectedDate = pickedDate;
+        _date = DateFormat('MM-dd-yy').format(_selectedDate);
+        _getData(); // Refresh data based on the new date
+      });
+    }
+  }
+
   _getData() async {
+    setState(() {
+      _isLoading = true;
+    });
     if (_auth.currentUser != null) {
       var doc = await _firestore
           .collection('userDetails')
-          .doc('pYh2aKK8NKXPOeWKBm2W')
+          .doc(_auth.currentUser!.uid)
           .get();
       var entries = doc['entries'];
       calorieGoal = doc['calorieGoal'] as int;
@@ -207,10 +246,16 @@ class _TrackState extends State<TrackScreen> {
             'protein': mealData['protein']
           });
         });
+        setState(() {
+          _isLoading = false;
+        });
       } else {
         _totalCalories = 0;
         _totalProtein = 0;
         _meals.clear();
+        setState(() {
+          _isLoading = false;
+        });
       }
       setState(() {});
     }
@@ -220,154 +265,369 @@ class _TrackState extends State<TrackScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        backgroundColor: Colors.white,
-        toolbarHeight: 80.0,
-        elevation: 0,
-        title: Row(
+        title: Column(
           mainAxisAlignment: MainAxisAlignment.start,
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            GestureDetector(
-              // <-- Wrap IconButton with GestureDetector
-              onTap: () {
-                setState(() {
-                  DateTime currentDate = DateFormat('MM-dd-yy').parse(_date);
-                  _date = DateFormat('MM-dd-yy')
-                      .format(currentDate.subtract(Duration(days: 1)));
-                  _getData();
-                });
-              },
-              child: Icon(
-                Icons.arrow_left,
-                color: Colors.black,
-              ), // <-- Replace IconButton with Icon
-            ), // <-- Optional, for some spacing between the icon and the date text
             Text(
-              _date,
+              _date.toString(),
               style: TextStyle(
-                  fontSize: 28,
-                  fontWeight: FontWeight.bold,
-                  color: Colors.black),
+                  color: AppColors.secondary,
+                  fontSize: 20,
+                  fontWeight: FontWeight.w500),
             ),
-            GestureDetector(
-              // <-- Wrap IconButton with GestureDetector
-              onTap: () {
-                setState(() {
-                  DateTime currentDate = DateFormat('MM-dd-yy').parse(_date);
-                  _date = DateFormat('MM-dd-yy')
-                      .format(currentDate.add(Duration(days: 1)));
-                  _getData();
-                });
-              },
-              child: Icon(
-                Icons.arrow_right,
-                color: Colors.black,
-              ), // <-- Replace IconButton with Icon
+            SizedBox(height: 1),
+            Text(
+              'Your Diary',
+              style: TextStyle(
+                  color: AppColors.primary,
+                  fontSize: 40,
+                  fontWeight: FontWeight.w700),
             ),
           ],
         ),
+        backgroundColor: Colors.white,
+        elevation: 0,
+        centerTitle: false,
+        toolbarHeight: 120.0,
+        bottom: PreferredSize(
+          preferredSize: Size.fromHeight(1.0), // here the desired height
+          child: Divider(
+            height: 1.0,
+            color: Color(0xFFDFE2E6),
+            thickness: 1, // color of the border
+          ),
+        ), // Adjusted height to add padding at the bottom
       ),
-      body: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: <Widget>[
-          Padding(
-            padding:
-                const EdgeInsets.only(top: 8, bottom: 8, left: 4, right: 4),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      body: _isLoading
+          ? Center(child: CircularProgressIndicator())
+          : Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: <Widget>[
-                _buildStatCard(
-                    'Calories', _totalCalories ?? 0, calorieGoal ?? 0),
-                _buildStatCard('Protein', _totalProtein ?? 0, proteinGoal ?? 0),
+                Padding(
+                  padding: const EdgeInsets.only(
+                      top: 8, bottom: 8, left: 4, right: 4),
+                  child: Column(
+                    children: <Widget>[
+                      _buildCalorieCard(
+                          'Calories', _totalCalories ?? 0, calorieGoal ?? 0),
+                      _buildProteinCard(
+                          'Protein', _totalProtein ?? 0, proteinGoal ?? 0),
+                    ],
+                  ),
+                ),
+                // Padding(
+                //   padding: const EdgeInsets.all(8.0),
+                //   child: Text('Meals',
+                //       style: TextStyle(fontSize: 22.0, fontWeight: FontWeight.bold)),
+                // ),
+                Expanded(
+                    child: ListView.builder(
+                  itemCount: _meals.length,
+                  itemBuilder: (BuildContext context, int index) {
+                    return Padding(
+                      padding: const EdgeInsets.all(8.0),
+                      child: Container(
+                        // add some margin for spacing
+                        decoration: BoxDecoration(
+                            color: Colors.white, // grey background color
+                            borderRadius:
+                                BorderRadius.circular(5.0), // rounded corners
+                            // border: Border(
+                            //   top: BorderSide(width: 0.5, color: Colors.grey),
+                            //   bottom: BorderSide(width: 0.5, color: Colors.grey),
+                            // ),
+                            border:
+                                Border.all(color: Color(0xFFDFE2E6), width: 1)),
+                        child: ListTile(
+                          title: Text(_meals[index]['name']),
+                          subtitle: Text(
+                              '${_meals[index]['calories']} kcal, ${_meals[index]['protein']} g protein'),
+                          trailing: IconButton(
+                            icon: Icon(Icons.delete),
+                            onPressed: () async {
+                              String path =
+                                  'entries.$_date.${_meals[index]['name']}';
+                              await _firestore
+                                  .collection('userDetails')
+                                  .doc('pYh2aKK8NKXPOeWKBm2W')
+                                  .update({path: FieldValue.delete()});
+                              _getData();
+                            },
+                          ),
+                        ),
+                      ),
+                    );
+                  },
+                )),
+                GestureDetector(
+                  onTap: () => _pickDate(
+                      context), // Use the _pickDate function to open the date picker
+                  child: Container(
+                    width: double.infinity, // Make it a full-width button
+                    color: AppColors
+                        .buttonBG, // Added a light background color to make it visually distinct
+                    padding: const EdgeInsets.all(16.0),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Icon(
+                          Icons.calendar_today,
+                          color: AppColors.buttonText,
+                        ),
+                        SizedBox(width: 8.0),
+                        Text(
+                          DateFormat('MM-dd-yy').format(
+                              _selectedDate), // Display the currently selected date
+                          style: TextStyle(
+                              fontSize: 16, color: AppColors.buttonText),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
               ],
             ),
+      floatingActionButton: Column(
+        // Enclose the FAB in a column
+        mainAxisSize: MainAxisSize.min, // Make it as small as possible
+        children: [
+          FloatingActionButton(
+            onPressed: _showAddBottomSheet,
+            child: Icon(Icons.add),
+            backgroundColor: AppColors.highlight,
           ),
-          Padding(
-            padding: const EdgeInsets.all(8.0),
-            child: Text('Meals',
-                style: TextStyle(fontSize: 22.0, fontWeight: FontWeight.bold)),
-          ),
-          Expanded(
-              child: ListView.builder(
-            itemCount: _meals.length,
-            itemBuilder: (BuildContext context, int index) {
-              return Container(
-                decoration: BoxDecoration(
-                  border: Border(
-                    top: BorderSide(width: 0.5, color: Colors.grey),
-                    bottom: BorderSide(width: 0.5, color: Colors.grey),
-                  ),
-                ),
-                child: ListTile(
-                  title: Text(_meals[index]['name']),
-                  subtitle: Text(
-                      '${_meals[index]['calories']} kcal, ${_meals[index]['protein']} g protein'),
-                  trailing: IconButton(
-                    icon: Icon(Icons.delete),
-                    onPressed: () async {
-                      String path = 'entries.$_date.${_meals[index]['name']}';
-                      await _firestore
-                          .collection('userDetails')
-                          .doc('pYh2aKK8NKXPOeWKBm2W')
-                          .update({path: FieldValue.delete()});
-                      _getData();
-                    },
-                  ),
-                ),
-              );
-            },
-          )),
+          SizedBox(
+              height:
+                  60.0), // Give some space between the FAB and the date picking button
         ],
-      ),
-      floatingActionButton: FloatingActionButton(
-        onPressed: _showAddBottomSheet,
-        child: Icon(Icons.add),
-        backgroundColor: Colors.blueAccent,
       ),
     );
   }
 
-  Widget _buildStatCard(String title, int current, int goal) {
+  Widget _buildCalorieCard(String title, int current, int goal) {
     double progress = goal == 0 ? 0.0 : (current / goal);
     progress = progress.isNaN || progress.isInfinite ? 0.0 : progress;
     progress = progress.clamp(0.0, 1.0); // Ensure it's within the valid range
 
-    return Expanded(
+    return Container(
+      height: 130,
       child: Card(
         shape: RoundedRectangleBorder(
-          side: BorderSide(color: Colors.grey, width: 1.0),
-          borderRadius: BorderRadius.circular(4.0),
+          side: BorderSide(color: Color(0xFFDFE2E6), width: 1.0),
+          borderRadius: BorderRadius.circular(5.0),
         ),
         elevation: 0.0,
+        color: Colors.white,
         child: Padding(
-          padding: const EdgeInsets.all(16.0),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: <Widget>[
-              Text(title,
-                  style: TextStyle(
-                      fontSize: 14.0,
-                      fontWeight: FontWeight.w600,
-                      color: Colors.grey)),
-              SizedBox(height: 4.0),
-              Text(
-                '$current/$goal',
-                style: TextStyle(fontSize: 24.0, fontWeight: FontWeight.bold),
+          padding: const EdgeInsets.all(28.0),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.center,
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Stack(
+                    alignment: Alignment.center,
+                    children: [
+                      SizedBox(
+                        height: 60,
+                        width: 60,
+                        child: CircularProgressIndicator(
+                          value: progress,
+                          strokeWidth: 8.0,
+                          backgroundColor: Colors.grey[300],
+                          valueColor: AlwaysStoppedAnimation<Color>(
+                              AppColors.highlight),
+                        ),
+                      ),
+                      Text(
+                        '${(progress * 100).toStringAsFixed(1)}%',
+                        style: TextStyle(
+                            fontSize: 12.0,
+                            fontWeight: FontWeight.w700,
+                            color: AppColors.primary),
+                      ), // Add an arrow icon to indicate the direction
+                    ],
+                  ),
+                  SizedBox(
+                    width: 24,
+                  ),
+                  Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Text(
+                        title,
+                        style: TextStyle(
+                            fontWeight: FontWeight.w700,
+                            fontSize: 14,
+                            color: AppColors.secondary),
+                      ),
+                      SizedBox(
+                        height: 2,
+                      ),
+                      Row(
+                        crossAxisAlignment: CrossAxisAlignment.baseline,
+                        textBaseline: TextBaseline.alphabetic,
+                        children: [
+                          Text(
+                            '$current/$goal',
+                            style: TextStyle(
+                                fontWeight: FontWeight.w700,
+                                fontSize: 28,
+                                color: AppColors.primary),
+                          ),
+                          SizedBox(
+                            width: 4,
+                          ),
+                          Text(
+                            'kcal',
+                            style: TextStyle(
+                                fontWeight: FontWeight.w500,
+                                fontSize: 14,
+                                color: AppColors.secondary),
+                          ),
+                        ],
+                      )
+                    ],
+                  ),
+                ],
               ),
-              SizedBox(height: 12.0),
-              SizedBox(
-                height: 20,
-                width: double.infinity, // takes up the full width of the card
-                child: LinearProgressIndicator(
-                  value: progress,
-                  valueColor: AlwaysStoppedAnimation(Colors.blueAccent),
-                  backgroundColor: Colors.grey[300],
-                ),
+              Stack(
+                alignment: Alignment.center,
+                children: [
+                  Container(
+                    width: 50.0,
+                    height: 50.0,
+                    decoration: BoxDecoration(
+                      color: AppColors.buttonBG,
+                      shape: BoxShape.circle,
+                    ),
+                  ),
+                  Icon(
+                    Icons.lunch_dining_rounded,
+                    color: AppColors.buttonText,
+                  ),
+                ],
+              )
+              // Added an icon to the right
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildProteinCard(String title, int current, int goal) {
+    double progress = goal == 0 ? 0.0 : (current / goal);
+    progress = progress.isNaN || progress.isInfinite ? 0.0 : progress;
+    progress = progress.clamp(0.0, 1.0); // Ensure it's within the valid range
+
+    return Container(
+      height: 130,
+      child: Card(
+        shape: RoundedRectangleBorder(
+          side: BorderSide(color: Color(0xFFDFE2E6), width: 1.0),
+          borderRadius: BorderRadius.circular(5.0),
+        ),
+        elevation: 0.0,
+        color: Colors.white,
+        child: Padding(
+          padding: const EdgeInsets.all(28.0),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.center,
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Stack(
+                    alignment: Alignment.center,
+                    children: [
+                      SizedBox(
+                        height: 60,
+                        width: 60,
+                        child: CircularProgressIndicator(
+                          value: progress,
+                          strokeWidth: 8.0,
+                          backgroundColor: Colors.grey[300],
+                          valueColor: AlwaysStoppedAnimation<Color>(
+                              AppColors.highlight),
+                        ),
+                      ),
+                      Text(
+                        '${(progress * 100).toStringAsFixed(1)}%',
+                        style: TextStyle(
+                            fontSize: 12.0,
+                            fontWeight: FontWeight.w700,
+                            color: AppColors.primary),
+                      ), // Add an arrow icon to indicate the direction
+                    ],
+                  ),
+                  SizedBox(
+                    width: 24,
+                  ),
+                  Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Text(
+                        title,
+                        style: TextStyle(
+                            fontWeight: FontWeight.w700,
+                            fontSize: 14,
+                            color: AppColors.secondary),
+                      ),
+                      SizedBox(
+                        height: 2,
+                      ),
+                      Row(
+                        crossAxisAlignment: CrossAxisAlignment.baseline,
+                        textBaseline: TextBaseline.alphabetic,
+                        children: [
+                          Text(
+                            '$current/$goal',
+                            style: TextStyle(
+                                fontWeight: FontWeight.w700,
+                                fontSize: 28,
+                                color: AppColors.primary),
+                          ),
+                          SizedBox(
+                            width: 4,
+                          ),
+                          Text(
+                            'grams',
+                            style: TextStyle(
+                                fontWeight: FontWeight.w500,
+                                fontSize: 14,
+                                color: AppColors.secondary),
+                          ),
+                        ],
+                      )
+                    ],
+                  ),
+                ],
               ),
-              SizedBox(height: 4.0),
-              Text(
-                '${(progress * 100).toStringAsFixed(1)}%',
-                style: TextStyle(fontSize: 16.0),
-              ),
+              Stack(
+                alignment: Alignment.center,
+                children: [
+                  Container(
+                    width: 50.0,
+                    height: 50.0,
+                    decoration: BoxDecoration(
+                      color: AppColors.buttonBG,
+                      shape: BoxShape.circle,
+                    ),
+                  ),
+                  Icon(
+                    Icons.egg_rounded,
+                    color: AppColors.buttonText,
+                  ),
+                ],
+              )
+              // Added an icon to the right
             ],
           ),
         ),

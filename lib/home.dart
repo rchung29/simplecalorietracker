@@ -44,7 +44,6 @@ class _HomeScreenState extends State<HomeScreen> {
       //     ),
       //   ],
       // ),
-
       body: _children[
           _currentIndex], // Display the screen corresponding to the current index
       bottomNavigationBar: BottomNavigationBar(
