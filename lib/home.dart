@@ -1,10 +1,11 @@
 import 'package:flutter/material.dart';
-import 'package:firebase_auth/firebase_auth.dart';
+
 import 'package:simpletracker/track.dart';
 // Import your additional screens
-import 'package:simpletracker/track.dart';
+
 import 'package:simpletracker/profile.dart';
-import 'package:simpletracker/login.dart';
+
+import 'package:simpletracker/workout.dart';
 
 class HomeScreen extends StatefulWidget {
   @override
@@ -16,6 +17,7 @@ class _HomeScreenState extends State<HomeScreen> {
 
   final List<Widget> _children = [
     TrackScreen(),
+    WorkoutScreen(),
     ProfileScreen(),
   ];
 
@@ -54,6 +56,10 @@ class _HomeScreenState extends State<HomeScreen> {
           BottomNavigationBarItem(
             icon: Icon(Icons.track_changes),
             label: 'Track',
+          ),
+          BottomNavigationBarItem(
+            icon: Icon(Icons.fitness_center),
+            label: 'Workout',
           ),
           BottomNavigationBarItem(
             icon: Icon(Icons.person),
