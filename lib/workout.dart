@@ -8,15 +8,15 @@ class WorkoutScreen extends StatefulWidget {
   _WorkoutState createState() => _WorkoutState();
 }
 
+final _formKey = GlobalKey<FormState>();
+final GlobalKey<ScaffoldState> _scaffoldKey = GlobalKey<ScaffoldState>();
+
 class _WorkoutState extends State<WorkoutScreen> {
   final FirebaseAuth _auth = FirebaseAuth.instance;
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
   late String _date;
 
   List<Map<String, dynamic>> _exercises = [];
-
-  int? calorieGoal;
-  int? proteinGoal;
 
   @override
   void initState() {
@@ -26,25 +26,37 @@ class _WorkoutState extends State<WorkoutScreen> {
   }
 
   TextEditingController _exerciseNameController = TextEditingController();
-  TextEditingController _weightController = TextEditingController();
-  TextEditingController _repsController = TextEditingController();
-  TextEditingController _setsController = TextEditingController();
 
   List<Map<String, dynamic>> _allLoggedDays = [];
 
   void _showAllLoggedDays() async {
-    DocumentSnapshot<Map<String, dynamic>> snapshot = await _firestore
+    // Reference to the workoutEntries for the user
+    CollectionReference workoutEntriesRef = _firestore
         .collection('userDetails')
         .doc('pYh2aKK8NKXPOeWKBm2W')
-        .get();
-    Map<String, dynamic> workoutEntries =
-        snapshot.data()?['workoutEntries'] ?? {};
+        .collection('workoutEntries');
+
+    // Fetch all dates (documents) under workoutEntries
+    QuerySnapshot workoutEntriesSnapshot = await workoutEntriesRef.get();
 
     _allLoggedDays.clear();
 
-    workoutEntries.forEach((date, exercises) {
+    for (QueryDocumentSnapshot dateDoc in workoutEntriesSnapshot.docs) {
+      String date = dateDoc.id;
+
+      // Fetch exercises for the specific date
+      QuerySnapshot exercisesSnapshot = await workoutEntriesRef
+          .doc(date)
+          .collection('exercises')
+          .orderBy('timestamp')
+          .get();
+      Map<String, dynamic> exercises = {};
+      for (QueryDocumentSnapshot exerciseDoc in exercisesSnapshot.docs) {
+        exercises[exerciseDoc.id] = exerciseDoc.data();
+      }
+
       _allLoggedDays.add({'date': date, 'exercises': exercises});
-    });
+    }
 
     showModalBottomSheet(
       context: context,
@@ -58,19 +70,212 @@ class _WorkoutState extends State<WorkoutScreen> {
               String date = _allLoggedDays[index]['date'];
               Map<String, dynamic> exercises =
                   _allLoggedDays[index]['exercises'];
+
+              List<Widget> exerciseWidgets = [];
+              exercises.forEach((exerciseId, exerciseData) {
+                exerciseWidgets.add(
+                  Text(exerciseData['name'],
+                      style: TextStyle(fontWeight: FontWeight.bold)),
+                );
+
+                Map<String, dynamic> sets = exerciseData['sets'];
+                sets.forEach((setId, setData) {
+                  exerciseWidgets.add(
+                    Padding(
+                      padding: const EdgeInsets.symmetric(
+                          vertical: 2.0, horizontal: 8.0),
+                      child: Text(
+                          'Set $setId: ${setData['weight']} lbs x ${setData['reps']}'),
+                    ),
+                  );
+                });
+              });
+
               return ListTile(
                 title: Text(DateFormat('EEEE - MM-dd-yy')
                     .format(DateFormat('MM-dd-yy').parse(date))),
                 subtitle: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
-                  children: exercises.keys.map((exercise) {
-                    return Padding(
-                      padding: const EdgeInsets.symmetric(vertical: 2.0),
-                      child: Text(
-                        '$exercise (Weight: ${exercises[exercise]['weight']}, Reps: ${exercises[exercise]['reps']}, Sets: ${exercises[exercise]['sets']})',
+                  children: exerciseWidgets,
+                ),
+              );
+            },
+          ),
+        );
+      },
+    );
+  }
+
+  void _showEditBottomSheet(Map<String, dynamic> exerciseList, String docId) {
+    var exercise = Map<String, dynamic>.from(exerciseList);
+    List<TextEditingController> repsTECs = [TextEditingController()];
+    List<TextEditingController> weightTECs = [TextEditingController()];
+
+    // Create a new list of controllers for each set
+    List<Map<String, dynamic>> sets = List.from(exercise['sets'].values);
+    sets.forEach((set) {
+      weightTECs.add(TextEditingController());
+      repsTECs.add(TextEditingController());
+    });
+
+    _exerciseNameController.text = exercise['name'];
+    showModalBottomSheet(
+      context: _scaffoldKey.currentContext!,
+      isScrollControlled: true,
+      builder: (BuildContext context) {
+        return Container(
+          height: MediaQuery.of(context).size.height * 0.6,
+          child: StatefulBuilder(
+            builder: (context, setState) {
+              return Padding(
+                padding: MediaQuery.of(context).viewInsets,
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Padding(
+                      padding: EdgeInsets.all(10.0),
+                      child: Form(
+                        key: _formKey,
+                        child: TextFormField(
+                          controller: _exerciseNameController,
+                          textCapitalization: TextCapitalization.words,
+                          decoration:
+                              InputDecoration(hintText: 'Exercise Name'),
+                          validator: (value) {
+                            if (value == null || value.isEmpty) {
+                              return 'Please enter an exercise name';
+                            }
+
+                            return null; // Return null if the input is valid
+                          },
+                        ),
                       ),
-                    );
-                  }).toList(),
+                    ),
+                    ListView.builder(
+                      shrinkWrap: true,
+                      itemCount: sets.length,
+                      itemBuilder: (context, index) {
+                        var repsController = repsTECs[index];
+                        var weightController = weightTECs[index];
+                        return Padding(
+                          padding: EdgeInsets.symmetric(
+                              horizontal: 10.0, vertical: 5.0),
+                          child: Row(
+                            children: [
+                              Expanded(
+                                child: Padding(
+                                  padding:
+                                      EdgeInsets.symmetric(horizontal: 5.0),
+                                  child: TextField(
+                                    controller: sets[index]['weight'] != 0
+                                        ? (weightController
+                                          ..text =
+                                              sets[index]['weight'].toString())
+                                        : weightController,
+                                    onChanged: (value) => sets[index]
+                                        ['weight'] = int.tryParse(value) ?? 0,
+                                    decoration:
+                                        InputDecoration(hintText: 'Weight'),
+                                    keyboardType: TextInputType.number,
+                                  ),
+                                ),
+                              ),
+                              Expanded(
+                                child: Padding(
+                                  padding:
+                                      EdgeInsets.symmetric(horizontal: 5.0),
+                                  child: TextField(
+                                    controller: sets[index]['reps'] != 0
+                                        ? (repsController
+                                          ..text =
+                                              sets[index]['reps'].toString())
+                                        : repsController,
+                                    onChanged: (value) => sets[index]['reps'] =
+                                        int.tryParse(value) ?? 0,
+                                    decoration:
+                                        InputDecoration(hintText: 'Reps'),
+                                    keyboardType: TextInputType.number,
+                                  ),
+                                ),
+                              ),
+                              IconButton(
+                                icon: Icon(Icons.remove_circle_outline),
+                                onPressed: () {
+                                  setState(() {
+                                    repsTECs[index].clear();
+                                    repsTECs[index].dispose();
+                                    weightTECs[index].clear();
+                                    weightTECs[index].dispose();
+                                    repsTECs.removeAt(index);
+                                    weightTECs.removeAt(index);
+                                    sets.removeAt(index);
+                                  });
+                                },
+                              ),
+                            ],
+                          ),
+                        );
+                      },
+                    ),
+                    Padding(
+                      padding: EdgeInsets.all(10.0),
+                      child: ElevatedButton(
+                        onPressed: () {
+                          setState(() {
+                            repsTECs.add(TextEditingController());
+                            weightTECs.add(TextEditingController());
+                            sets.add({
+                              'weight': 0,
+                              'reps': 0,
+                            });
+                          });
+                        },
+                        child: Text("Add Set"),
+                      ),
+                    ),
+                    Padding(
+                      padding: EdgeInsets.all(10.0),
+                      child: ElevatedButton(
+                        child: Text('Save'),
+                        onPressed: () async {
+                          if (_formKey.currentState!.validate()) {
+                            String exerciseName = _exerciseNameController.text;
+
+                            // Save logic...
+                            await _firestore
+                                .collection('userDetails')
+                                .doc('pYh2aKK8NKXPOeWKBm2W')
+                                .collection('workoutEntries')
+                                .doc(_date)
+                                .collection('exercises')
+                                .doc(docId)
+                                .update({
+                              'name': _exerciseNameController.text,
+                              'sets': sets.asMap().map((index, set) =>
+                                  MapEntry('${index + 1}', set)),
+                            });
+
+                            _getData();
+                            Navigator.of(context).pop();
+                            setState(() {
+                              _exerciseNameController.clear();
+                              for (var tec in repsTECs) {
+                                tec.clear();
+                                tec.dispose();
+                              }
+                              for (var tec in weightTECs) {
+                                tec.clear();
+                                tec.dispose();
+                              }
+                              repsTECs.clear();
+                              weightTECs.clear();
+                              sets.clear();
+                            });
+                          }
+                        },
+                      ),
+                    ),
+                  ],
                 ),
               );
             },
@@ -81,81 +286,172 @@ class _WorkoutState extends State<WorkoutScreen> {
   }
 
   void _showAddBottomSheet() {
+    _exerciseNameController.clear();
+    List<Map<String, dynamic>> sets = [
+      {
+        'weight': 0,
+        'reps': 0,
+      }
+    ];
+    List<TextEditingController> repsTECs = [TextEditingController()];
+    List<TextEditingController> weightTECs = [TextEditingController()];
+
     showModalBottomSheet(
-      context: context,
+      context: _scaffoldKey.currentContext!,
       isScrollControlled: true,
       builder: (BuildContext context) {
-        return FractionallySizedBox(
-          heightFactor: 0.6,
+        return Container(
+          height: MediaQuery.of(context).size.height * 0.6,
           child: StatefulBuilder(
             builder: (context, setState) {
               return Padding(
-                padding: const EdgeInsets.all(16.0),
+                padding: MediaQuery.of(context).viewInsets,
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    TextField(
-                      controller:
-                          _exerciseNameController, // Rename this to _exerciseNameController
-                      textCapitalization:
-                          TextCapitalization.words, // Add this line
-                      decoration: InputDecoration(hintText: 'Exercise Name'),
-                    ),
-                    TextField(
-                      controller:
-                          _weightController, // Rename this to _weightController
-                      decoration: InputDecoration(hintText: 'Weight'),
-                      keyboardType: TextInputType.number,
-                    ),
-                    TextField(
-                      controller:
-                          _repsController, // Rename this to _repsController
-                      decoration: InputDecoration(hintText: 'Reps'),
-                      keyboardType: TextInputType.number,
-                    ),
-                    TextField(
-                      // New TextField for sets
-                      controller: _setsController,
-                      decoration: InputDecoration(hintText: 'Sets'),
-                      keyboardType: TextInputType.number,
-                    ),
-                    ElevatedButton(
-                      child: Text('Add'),
-                      onPressed: () async {
-                        var exerciseName = _exerciseNameController
-                            .text; // Rename to _exerciseNameController
-                        var weight = int.tryParse(_weightController.text) ??
-                            0; // Rename to _weightController
-                        var reps = int.tryParse(_repsController.text) ??
-                            0; // Rename to _repsController
-                        // Capture sets value too
-                        var sets = int.tryParse(_setsController.text) ??
-                            0; // Add this line
-
-                        // Adjust Firestore saving logic to save these details instead of meal details
-                        await _firestore
-                            .collection('userDetails')
-                            .doc('pYh2aKK8NKXPOeWKBm2W')
-                            .set({
-                          'workoutEntries': {
-                            _date: {
-                              exerciseName: {
-                                'weight': weight,
-                                'reps': reps,
-                                'sets': sets,
-                              }
+                    Padding(
+                      padding: EdgeInsets.all(10.0),
+                      child: Form(
+                        key: _formKey,
+                        child: TextFormField(
+                          controller: _exerciseNameController,
+                          textCapitalization: TextCapitalization.words,
+                          decoration:
+                              InputDecoration(hintText: 'Exercise Name'),
+                          validator: (value) {
+                            if (value == null || value.isEmpty) {
+                              return 'Please enter an exercise name';
                             }
-                          }
-                        }, SetOptions(merge: true));
 
-                        _getData();
-                        Navigator.of(context).pop();
-                        // Clear all the controllers
-                        _exerciseNameController.clear();
-                        _weightController.clear();
-                        _repsController.clear();
-                        _setsController.clear();
+                            return null; // Return null if the input is valid
+                          },
+                        ),
+                      ),
+                    ),
+                    ListView.builder(
+                      shrinkWrap: true,
+                      itemCount: sets.length,
+                      itemBuilder: (context, index) {
+                        var repsController = repsTECs[index];
+                        var weightController = weightTECs[index];
+                        return Padding(
+                          padding: EdgeInsets.symmetric(
+                              horizontal: 10.0, vertical: 5.0),
+                          child: Row(
+                            children: [
+                              Expanded(
+                                child: Padding(
+                                  padding:
+                                      EdgeInsets.symmetric(horizontal: 5.0),
+                                  child: TextField(
+                                    controller: weightController,
+                                    onChanged: (value) => sets[index]
+                                        ['weight'] = int.tryParse(value) ?? 0,
+                                    decoration:
+                                        InputDecoration(hintText: 'Weight'),
+                                    keyboardType: TextInputType.number,
+                                  ),
+                                ),
+                              ),
+                              Expanded(
+                                child: Padding(
+                                  padding:
+                                      EdgeInsets.symmetric(horizontal: 5.0),
+                                  child: TextField(
+                                    controller: repsController,
+                                    onChanged: (value) => sets[index]['reps'] =
+                                        int.tryParse(value) ?? 0,
+                                    decoration:
+                                        InputDecoration(hintText: 'Reps'),
+                                    keyboardType: TextInputType.number,
+                                  ),
+                                ),
+                              ),
+                              IconButton(
+                                icon: Icon(Icons.remove_circle_outline),
+                                onPressed: () {
+                                  setState(() {
+                                    repsTECs[index].clear();
+                                    repsTECs[index].dispose();
+                                    weightTECs[index].clear();
+                                    weightTECs[index].dispose();
+                                    repsTECs.removeAt(index);
+                                    weightTECs.removeAt(index);
+                                    sets.removeAt(index);
+                                  });
+                                },
+                              ),
+                            ],
+                          ),
+                        );
                       },
+                    ),
+                    Padding(
+                      padding: EdgeInsets.all(10.0),
+                      child: ElevatedButton(
+                        onPressed: () {
+                          setState(() {
+                            repsTECs.add(TextEditingController());
+                            weightTECs.add(TextEditingController());
+                            sets.add({
+                              'weight': 0,
+                              'reps': 0,
+                            });
+                          });
+                        },
+                        child: Text("Add Set"),
+                      ),
+                    ),
+                    Padding(
+                      padding: EdgeInsets.all(10.0),
+                      child: ElevatedButton(
+                        child: Text('Save'),
+                        onPressed: () async {
+                          if (_formKey.currentState!.validate()) {
+                            String exerciseName = _exerciseNameController.text;
+
+                            // Save logic...
+                            DocumentReference exerciseRef = _firestore
+                                .collection('userDetails')
+                                .doc('pYh2aKK8NKXPOeWKBm2W')
+                                .collection('workoutEntries')
+                                .doc(_date)
+                                .collection('exercises')
+                                .doc();
+
+                            await _firestore
+                                .collection('userDetails')
+                                .doc('pYh2aKK8NKXPOeWKBm2W')
+                                .collection('workoutEntries')
+                                .doc(_date)
+                                .set({'date': _date});
+
+                            await exerciseRef.set({
+                              'name': exerciseName,
+                              'sets': sets.asMap().map((index, set) =>
+                                  MapEntry('${index + 1}', set)),
+                              'timestamp': FieldValue.serverTimestamp()
+                            });
+
+                            _getData();
+                            Navigator.of(context).pop();
+                            setState(() {
+                              _exerciseNameController.clear();
+                              for (var tec in repsTECs) {
+                                tec.clear();
+                                tec.dispose();
+                              }
+                              for (var tec in weightTECs) {
+                                tec.clear();
+                                tec.dispose();
+                              }
+                              repsTECs.clear();
+                              weightTECs.clear();
+                              sets.clear();
+                            });
+                          }
+                        },
+                      ),
                     ),
                   ],
                 ),
@@ -169,28 +465,31 @@ class _WorkoutState extends State<WorkoutScreen> {
 
   _getData() async {
     if (_auth.currentUser != null) {
-      var doc = await _firestore
+      // Reference to the specific date under workoutEntries for the user
+      CollectionReference exercisesRef = _firestore
           .collection('userDetails')
           .doc('pYh2aKK8NKXPOeWKBm2W')
-          .get();
-      var workoutEntries = doc['workoutEntries'];
+          .collection('workoutEntries')
+          .doc(_date)
+          .collection('exercises');
 
-      if (workoutEntries.containsKey(_date)) {
-        var exercisesData = workoutEntries[_date];
-        _exercises
-            .clear(); // Rename this to _workouts or something more suitable
-        exercisesData.forEach((exerciseName, exerciseData) {
-          _exercises.add({
-            'name': exerciseName,
-            'weight': exerciseData['weight'],
-            'reps': exerciseData['reps'],
-            'sets': exerciseData['sets']
-          });
+      // Fetch all exercises for that date
+      QuerySnapshot exercisesSnapshot =
+          await exercisesRef.orderBy('timestamp').get();
+
+      _exercises.clear(); // Rename this to _workouts or something more suitable
+
+      // Iterate over each exercise document and add to _exercises
+      for (QueryDocumentSnapshot exerciseDoc in exercisesSnapshot.docs) {
+        Map<String, dynamic> exerciseData =
+            exerciseDoc.data() as Map<String, dynamic>;
+        _exercises.add({
+          'id': exerciseDoc.id,
+          'name': exerciseData['name'],
+          'sets': exerciseData['sets'],
         });
-      } else {
-        _exercises
-            .clear(); // Rename this to _workouts or something more suitable
       }
+
       setState(() {});
     }
   }
@@ -198,6 +497,7 @@ class _WorkoutState extends State<WorkoutScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      key: _scaffoldKey,
       appBar: AppBar(
         backgroundColor: Colors.white,
         toolbarHeight: 80.0,
@@ -292,22 +592,36 @@ class _WorkoutState extends State<WorkoutScreen> {
                     bottom: BorderSide(width: 0.5, color: Colors.grey),
                   ),
                 ),
-                child: ListTile(
-                  title: Text(_exercises[index][
-                      'name']), // Rename _exercises to _workouts or a similar name
-                  subtitle: Text(
-                      'Weight: ${_exercises[index]['weight']} lbs, Reps: ${_exercises[index]['reps']}, Sets: ${_exercises[index]['sets']}'),
-                  trailing: IconButton(
-                    icon: Icon(Icons.delete),
-                    onPressed: () async {
-                      String path =
-                          'workoutEntries.$_date.${_exercises[index]['name']}'; // Updated the path
-                      await _firestore
-                          .collection('userDetails')
-                          .doc('pYh2aKK8NKXPOeWKBm2W')
-                          .update({path: FieldValue.delete()});
-                      _getData();
-                    },
+                child: Padding(
+                  padding: const EdgeInsets.only(top: 15),
+                  child: ListTile(
+                    onTap: () => _showEditBottomSheet(
+                        _exercises[index], _exercises[index]['id']),
+
+                    title: Text(_exercises[index]['name'] ??
+                        ""), // Rename _exercises to _workouts or a similar name
+                    subtitle: Text(_exercises[index]['sets']
+                            .entries
+                            .map((set) =>
+                                'Set ${set.key}: ${set.value['weight']} lbs x ${set.value['reps']}')
+                            .join('\n') +
+                        '\n'),
+                    trailing: IconButton(
+                      icon: Icon(Icons.delete),
+                      onPressed: () async {
+                        await _firestore
+                            .collection('userDetails')
+                            .doc('pYh2aKK8NKXPOeWKBm2W')
+                            .collection('workoutEntries')
+                            .doc(
+                                _date) // Assuming _date is the date document ID
+                            .collection('exercises')
+                            .doc(_exercises[index]
+                                ['id']) // Assuming this is the document ID
+                            .delete();
+                        _getData();
+                      },
+                    ),
                   ),
                 ),
               );
@@ -319,55 +633,6 @@ class _WorkoutState extends State<WorkoutScreen> {
         onPressed: _showAddBottomSheet,
         child: Icon(Icons.add),
         backgroundColor: Colors.blueAccent,
-      ),
-    );
-  }
-
-  Widget _buildStatCard(String title, int current, int goal) {
-    double progress = goal == 0 ? 0.0 : (current / goal);
-    progress = progress.isNaN || progress.isInfinite ? 0.0 : progress;
-    progress = progress.clamp(0.0, 1.0); // Ensure it's within the valid range
-
-    return Expanded(
-      child: Card(
-        shape: RoundedRectangleBorder(
-          side: BorderSide(color: Colors.grey, width: 1.0),
-          borderRadius: BorderRadius.circular(4.0),
-        ),
-        elevation: 0.0,
-        child: Padding(
-          padding: const EdgeInsets.all(16.0),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: <Widget>[
-              Text(title,
-                  style: TextStyle(
-                      fontSize: 14.0,
-                      fontWeight: FontWeight.w600,
-                      color: Colors.grey)),
-              SizedBox(height: 4.0),
-              Text(
-                '$current/$goal',
-                style: TextStyle(fontSize: 24.0, fontWeight: FontWeight.bold),
-              ),
-              SizedBox(height: 12.0),
-              SizedBox(
-                height: 20,
-                width: double.infinity, // takes up the full width of the card
-                child: LinearProgressIndicator(
-                  value: progress,
-                  valueColor: AlwaysStoppedAnimation(Colors.blueAccent),
-                  backgroundColor: Colors.grey[300],
-                ),
-              ),
-              SizedBox(height: 4.0),
-              Text(
-                '${(progress * 100).toStringAsFixed(1)}%',
-                style: TextStyle(fontSize: 16.0),
-              ),
-            ],
-          ),
-        ),
       ),
     );
   }
