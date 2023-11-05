@@ -17,10 +17,7 @@ import 'package:flutter/foundation.dart'
 class DefaultFirebaseOptions {
   static FirebaseOptions get currentPlatform {
     if (kIsWeb) {
-      throw UnsupportedError(
-        'DefaultFirebaseOptions have not been configured for web - '
-        'you can reconfigure this by running the FlutterFire CLI again.',
-      );
+      return web;
     }
     switch (defaultTargetPlatform) {
       case TargetPlatform.android:
@@ -52,12 +49,22 @@ class DefaultFirebaseOptions {
     }
   }
 
+  static const FirebaseOptions web = FirebaseOptions(
+    apiKey: 'AIzaSyCD56p5heai0a8UqumYUPyUXCENIeRUKB4',
+    appId: '1:136719823175:web:0187a7cf476f03053c1c62',
+    messagingSenderId: '136719823175',
+    projectId: 'tracker-de9f7',
+    authDomain: 'tracker-de9f7.firebaseapp.com',
+    storageBucket: 'tracker-de9f7.appspot.com',
+    measurementId: 'G-TGC5PHNCXC',
+  );
+
   static const FirebaseOptions ios = FirebaseOptions(
-    apiKey: 'AIzaSyAF9ChMH7qs4pjVXggudaqYmP9MywZL2uU',
-    appId: '1:495866144925:ios:becc3c8b0d801c714a4c74',
-    messagingSenderId: '495866144925',
-    projectId: 'simpletracker-de990',
-    storageBucket: 'simpletracker-de990.appspot.com',
+    apiKey: 'AIzaSyCIMclebRGmmq-Whkgvqp5wsCAI5B4X3EY',
+    appId: '1:136719823175:ios:308241cc0dfe16b73c1c62',
+    messagingSenderId: '136719823175',
+    projectId: 'tracker-de9f7',
+    storageBucket: 'tracker-de9f7.appspot.com',
     iosBundleId: 'com.example.simpletracker',
   );
 }

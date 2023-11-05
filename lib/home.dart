@@ -16,9 +16,9 @@ class _HomeScreenState extends State<HomeScreen> {
   int _currentIndex = 0;
 
   final List<Widget> _children = [
-    TrackScreen(),
+    // TrackScreen(),
     WorkoutScreen(),
-    ProfileScreen(),
+    // ProfileScreen(),
   ];
 
   void onTabTapped(int index) {
@@ -53,18 +53,18 @@ class _HomeScreenState extends State<HomeScreen> {
         onTap: onTabTapped,
         currentIndex: _currentIndex,
         items: [
-          BottomNavigationBarItem(
-            icon: Icon(Icons.track_changes),
-            label: 'Track',
-          ),
+          // BottomNavigationBarItem(
+          //   icon: Icon(Icons.track_changes),
+          //   label: 'Track',
+          // ),
           BottomNavigationBarItem(
             icon: Icon(Icons.fitness_center),
             label: 'Workout',
           ),
-          BottomNavigationBarItem(
-            icon: Icon(Icons.person),
-            label: 'Profile',
-          ),
+          // BottomNavigationBarItem(
+          //   icon: Icon(Icons.person),
+          //   label: 'Profile',
+          // ),
         ],
       ),
     );
