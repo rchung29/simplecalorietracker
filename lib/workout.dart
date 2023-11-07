@@ -687,19 +687,24 @@ class _WorkoutState extends State<WorkoutScreen> {
             ),
           );
         },
-        child: ListTile(
-          title: Text(exercise['name'] ?? "Unnamed Exercise"),
-          subtitle: Text(
-            exercise['sets']
-                    .entries
-                    .map((set) =>
-                        'Set ${set.key}: ${set.value['weight']} lbs x ${set.value['reps']}')
-                    .join('\n') +
-                '\n',
-          ),
-          trailing: ReorderableDragStartListener(
-            index: index, // Replace with the index of the item in the list
-            child: Icon(Icons.drag_handle),
+        child: GestureDetector(
+          onTap: () {
+            _showEditBottomSheet(_exercises[index], exercise['id']);
+          },
+          child: ListTile(
+            title: Text(exercise['name'] ?? "Unnamed Exercise"),
+            subtitle: Text(
+              exercise['sets']
+                      .entries
+                      .map((set) =>
+                          'Set ${set.key}: ${set.value['weight']} lbs x ${set.value['reps']}')
+                      .join('\n') +
+                  '\n',
+            ),
+            trailing: ReorderableDragStartListener(
+              index: index, // Replace with the index of the item in the list
+              child: Icon(Icons.drag_handle),
+            ),
           ),
         ),
       );
