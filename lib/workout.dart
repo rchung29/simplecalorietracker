@@ -19,16 +19,11 @@ class _WorkoutState extends State<WorkoutScreen> {
   List<Map<String, dynamic>> _exercises = [];
 
   @override
-  void initState() async {
+  void initState() {
     super.initState();
     _date = DateFormat('MM-dd-yy').format(DateTime.now());
-    setState(() {
-      _isLoading = true; // Start loading
-    });
-    await _getData();
-    setState(() {
-      _isLoading = false; // Start loading
-    });
+
+    _getData();
   }
 
   TextEditingController _exerciseNameController = TextEditingController();
@@ -58,9 +53,9 @@ class _WorkoutState extends State<WorkoutScreen> {
       QuerySnapshot exercisesSnapshot = await workoutEntriesRef
           .doc(date)
           .collection('exercises')
-          .orderBy('timestamp')
+          .orderBy('order')
           .get();
-      Map<String, dynamic> exercises = {};
+
       if (exercisesSnapshot.docs.isNotEmpty) {
         Map<String, dynamic> exercises = {};
         for (QueryDocumentSnapshot exerciseDoc in exercisesSnapshot.docs) {
@@ -217,7 +212,7 @@ class _WorkoutState extends State<WorkoutScreen> {
                                             : weightController,
                                         onChanged: (value) => sets[index]
                                                 ['weight'] =
-                                            int.tryParse(value) ?? 0,
+                                            double.tryParse(value) ?? 0,
                                         decoration:
                                             InputDecoration(hintText: 'Weight'),
                                         keyboardType: const TextInputType
@@ -406,7 +401,7 @@ class _WorkoutState extends State<WorkoutScreen> {
                                             controller: weightController,
                                             onChanged: (value) => sets[index]
                                                     ['weight'] =
-                                                int.tryParse(value) ?? 0,
+                                                double.tryParse(value) ?? 0,
                                             decoration: InputDecoration(
                                                 hintText: 'Weight'),
                                             keyboardType: TextInputType.number,
@@ -493,7 +488,8 @@ class _WorkoutState extends State<WorkoutScreen> {
                                     'name': exerciseName,
                                     'sets': sets.asMap().map((index, set) =>
                                         MapEntry('${index + 1}', set)),
-                                    'timestamp': FieldValue.serverTimestamp()
+                                    'timestamp': FieldValue.serverTimestamp(),
+                                    'order': _exercises.length,
                                   });
 
                                   _getData();
@@ -541,7 +537,7 @@ class _WorkoutState extends State<WorkoutScreen> {
 
       // Fetch all exercises for that date
       QuerySnapshot exercisesSnapshot =
-          await exercisesRef.orderBy('timestamp').get();
+          await exercisesRef.orderBy('order').get();
 
       _exercises.clear(); // Rename this to _workouts or something more suitable
 
@@ -555,9 +551,8 @@ class _WorkoutState extends State<WorkoutScreen> {
           'sets': exerciseData['sets'],
         });
       }
-
-      setState(() {});
     }
+    setState(() {});
   }
 
   Future<void> _loadAndSavePreviousWorkout(String selectedDate) async {
@@ -581,12 +576,18 @@ class _WorkoutState extends State<WorkoutScreen> {
           .collection('workoutEntries')
           .doc(selectedDate)
           .collection('exercises')
-          .orderBy('timestamp')
+          .orderBy('order')
           .get();
 
       List<Map<String, dynamic>> loadedExercises = [];
       for (var exerciseDoc in exercisesSnapshot.docs) {
-        loadedExercises.add(exerciseDoc.data() as Map<String, dynamic>);
+        Map<String, dynamic> exerciseData =
+            exerciseDoc.data() as Map<String, dynamic>;
+        loadedExercises.add({
+          'id': exerciseDoc.id,
+          'name': exerciseData['name'],
+          'sets': exerciseData['sets'],
+        });
       }
 
       setState(() {
@@ -611,7 +612,8 @@ class _WorkoutState extends State<WorkoutScreen> {
           'name': exercise['name'],
           'sets': exercise['sets'],
           'timestamp':
-              FieldValue.serverTimestamp() // Optionally add a timestamp
+              FieldValue.serverTimestamp(), // Optionally add a timestamp
+          'order': loadedExercises.indexOf(exercise),
         });
       }
 
@@ -629,6 +631,101 @@ class _WorkoutState extends State<WorkoutScreen> {
         ),
       );
     }
+  }
+
+  void _onReorder(int oldIndex, int newIndex) {
+    setState(() {
+      if (newIndex > oldIndex) {
+        newIndex -= 1; // Adjust for the removal
+      }
+      final item = _exercises.removeAt(oldIndex);
+      _exercises.insert(newIndex, item);
+
+      // Additionally, you might want to persist the order changes to your database.
+      // This would be the place to call a method that updates your database with the new order.
+      _saveOrderToDatabase();
+    });
+  }
+
+  List<Widget> _getExerciseWidgets() {
+    return List.generate(_exercises.length, (index) {
+      final exercise = _exercises[index];
+      return Dismissible(
+        // UniqueKey is used to ensure that Flutter can uniquely identify each Dismissible
+        key: ValueKey(exercise['id']),
+        background: Container(
+          color: Colors.red,
+          alignment: Alignment.centerRight,
+          child: Padding(
+            padding: const EdgeInsets.only(right: 20.0),
+            child: Icon(Icons.delete, color: Colors.white),
+          ),
+        ),
+        direction: DismissDirection
+            .endToStart, // The direction in which the dismissible can be dismissed
+        onDismissed: (direction) async {
+          // Remove the item from the data source
+          await _firestore
+              .collection('userDetails')
+              .doc(_auth.currentUser?.uid)
+              .collection('workoutEntries')
+              .doc(_date)
+              .collection('exercises')
+              .doc(exercise['id'])
+              .delete();
+          _getData();
+
+          // Then remove it from the screen
+          setState(() {
+            _exercises.removeAt(index);
+          });
+
+          // Show a snackbar! This snackbar could also contain "Undo" actions.
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text("Exercise deleted"),
+            ),
+          );
+        },
+        child: ListTile(
+          title: Text(exercise['name'] ?? "Unnamed Exercise"),
+          subtitle: Text(
+            exercise['sets']
+                    .entries
+                    .map((set) =>
+                        'Set ${set.key}: ${set.value['weight']} lbs x ${set.value['reps']}')
+                    .join('\n') +
+                '\n',
+          ),
+          trailing: ReorderableDragStartListener(
+            index: index, // Replace with the index of the item in the list
+            child: Icon(Icons.drag_handle),
+          ),
+        ),
+      );
+    });
+  }
+
+  Future<void> _saveOrderToDatabase() async {
+    // Create a batch to perform all writes at once
+    WriteBatch batch = _firestore.batch();
+
+    for (int order = 0; order < _exercises.length; order++) {
+      // Get the exercise document reference
+      DocumentReference exerciseRef = _firestore
+          .collection('userDetails')
+          .doc(_auth.currentUser?.uid)
+          .collection('workoutEntries')
+          .doc(_date)
+          .collection('exercises')
+          .doc(_exercises[order]['id']);
+
+      // Update the order field in the document
+      batch.update(exerciseRef, {'order': order});
+    }
+
+    // Commit the batch write to the database
+    await batch.commit();
   }
 
   bool _isLoading = false;
@@ -690,8 +787,10 @@ class _WorkoutState extends State<WorkoutScreen> {
               onTap: () {
                 setState(() {
                   DateTime currentDate = DateFormat('MM-dd-yy').parse(_date);
-                  _date = DateFormat('MM-dd-yy')
-                      .format(currentDate.add(Duration(days: 1)));
+
+                  _date = DateFormat('MM-dd-yy').format(
+                      currentDate.add(const Duration(days: 1, hours: 23)));
+
                   _getData();
                 });
               },
@@ -750,9 +849,14 @@ class _WorkoutState extends State<WorkoutScreen> {
                                         String formattedDate =
                                             DateFormat('MM-dd-yy')
                                                 .format(pickedDate);
+                                        setState(() {
+                                          _isLoading = true; // Start loading
+                                        });
                                         await _loadAndSavePreviousWorkout(
                                             formattedDate);
-                                        // If you just want to load and not save, you can call the _loadPreviousWorkout method instead
+                                        setState(() {
+                                          _isLoading = false; // Start loading
+                                        });
                                       }
                                     },
                                     child: Text("Load Previous Workout +")),
@@ -760,64 +864,21 @@ class _WorkoutState extends State<WorkoutScreen> {
                             ],
                           ),
                         )
-                      : ListView.builder(
-                          itemCount: _exercises.length + 1,
-                          itemBuilder: (BuildContext context, int index) {
-                            if (index == _exercises.length) {
-                              // Return an empty container for extra space
-                              return SizedBox(
-                                  height: 100); // Adjust the height as needed
-                            }
-                            return Container(
-                              decoration: BoxDecoration(
-                                border: Border(
-                                  top: BorderSide(
-                                      width: 0.5, color: Colors.grey),
-                                  bottom: BorderSide(
-                                      width: 0.5, color: Colors.grey),
-                                ),
-                              ),
-                              child: Padding(
-                                padding: const EdgeInsets.only(top: 15),
-                                child: ListTile(
-                                  onTap: () => _showEditBottomSheet(
-                                      _exercises[index],
-                                      _exercises[index]['id']),
-
-                                  title: Text(_exercises[index]['name'] ??
-                                      ""), // Rename _exercises to _workouts or a similar name
-                                  subtitle: Text(_exercises[index]['sets']
-                                          .entries
-                                          .map((set) =>
-                                              'Set ${set.key}: ${set.value['weight']} lbs x ${set.value['reps']}')
-                                          .join('\n') +
-                                      '\n'),
-                                  trailing: IconButton(
-                                    icon: Icon(Icons.delete),
-                                    onPressed: () async {
-                                      await _firestore
-                                          .collection('userDetails')
-                                          .doc(_auth.currentUser?.uid)
-                                          .collection('workoutEntries')
-                                          .doc(
-                                              _date) // Assuming _date is the date document ID
-                                          .collection('exercises')
-                                          .doc(_exercises[index][
-                                              'id']) // Assuming this is the document ID
-                                          .delete();
-                                      _getData();
-                                    },
-                                  ),
-                                ),
-                              ),
-                            );
-                          },
-                        )),
+                      : ReorderableListView(
+                          onReorder: _onReorder,
+                          padding: const EdgeInsets.only(bottom: 100),
+                          buildDefaultDragHandles: false,
+                          children: _getExerciseWidgets())),
         ],
       ),
       floatingActionButton: FloatingActionButton(
         onPressed: _showAddBottomSheet,
-        child: Icon(Icons.add),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(Icons.add),
+          ],
+        ),
         backgroundColor: Colors.blueAccent,
       ),
     );

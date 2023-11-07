@@ -49,24 +49,24 @@ class _HomeScreenState extends State<HomeScreen> {
 
       body: _children[
           _currentIndex], // Display the screen corresponding to the current index
-      bottomNavigationBar: BottomNavigationBar(
-        onTap: onTabTapped,
-        currentIndex: _currentIndex,
-        items: [
-          // BottomNavigationBarItem(
-          //   icon: Icon(Icons.track_changes),
-          //   label: 'Track',
-          // ),
-          BottomNavigationBarItem(
-            icon: Icon(Icons.fitness_center),
-            label: 'Workout',
-          ),
-          // BottomNavigationBarItem(
-          //   icon: Icon(Icons.person),
-          //   label: 'Profile',
-          // ),
-        ],
-      ),
+      // bottomNavigationBar: BottomNavigationBar(
+      //   onTap: onTabTapped,
+      //   currentIndex: _currentIndex,
+      //   items: [
+      //     // BottomNavigationBarItem(
+      //     //   icon: Icon(Icons.track_changes),
+      //     //   label: 'Track',
+      //     // ),
+      //     BottomNavigationBarItem(
+      //       icon: Icon(Icons.fitness_center),
+      //       label: 'Workout',
+      //     ),
+      //     // BottomNavigationBarItem(
+      //     //   icon: Icon(Icons.person),
+      //     //   label: 'Profile',
+      //     // ),
+      //   ],
+      // ),
     );
   }
 }
