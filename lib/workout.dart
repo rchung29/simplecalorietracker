@@ -21,6 +21,7 @@ class _WorkoutState extends State<WorkoutScreen> {
   @override
   void initState() {
     super.initState();
+    _isLoading = true;
     _date = DateFormat('MM-dd-yy').format(DateTime.now());
 
     _getData();
@@ -96,7 +97,7 @@ class _WorkoutState extends State<WorkoutScreen> {
                     List<Widget> exerciseWidgets = [];
                     exercises.forEach((exerciseId, exerciseData) {
                       exerciseWidgets.add(
-                        Text(exerciseData['name'],
+                        Text("  " + exerciseData['name'],
                             style: TextStyle(fontWeight: FontWeight.bold)),
                       );
 
@@ -107,15 +108,17 @@ class _WorkoutState extends State<WorkoutScreen> {
                             padding: const EdgeInsets.symmetric(
                                 vertical: 2.0, horizontal: 8.0),
                             child: Text(
-                                'Set $setId: ${setData['weight']} lbs x ${setData['reps']}'),
+                                '   Set $setId: ${setData['weight']} lbs x ${setData['reps']}'),
                           ),
                         );
                       });
                     });
 
                     return ListTile(
-                      title: Text(DateFormat('EEEE - MM-dd-yy')
-                          .format(DateFormat('MM-dd-yy').parse(date))),
+                      title: Text(
+                          style: TextStyle(fontWeight: FontWeight.w700),
+                          DateFormat('EEEE - MM-dd-yy')
+                              .format(DateFormat('MM-dd-yy').parse(date))),
                       subtitle: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: exerciseWidgets),
@@ -552,7 +555,9 @@ class _WorkoutState extends State<WorkoutScreen> {
         });
       }
     }
-    setState(() {});
+    setState(() {
+      _isLoading = false;
+    });
   }
 
   Future<void> _loadAndSavePreviousWorkout(String selectedDate) async {
